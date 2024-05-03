@@ -1,10 +1,23 @@
 # sensitivity-labels
 Get and set Microsoft sensitivity labels.
 
+### demo
 ```
-usage:
-        labels.exe [--flags] get [path]
-        labels.exe [--flags] set [path] [labelId] [tenantId]
+$ ./labels get .
+
+LabelInfo FilePath NumLabels Labels
+true ./123.xlsx 1 [3de9faa6-9fe1-49b3-9a08-227a296b54a6 d5fe813e-0caa-432a-b2ac-d555aa91bd1c]
+true ./ABC.xlsx 1 [3de9faa6-9fe1-49b3-9a08-227a296b54a6 d5fe813e-0caa-432a-b2ac-d555aa91bd1c]
+true ./Test.xlsx 1 [3de9faa6-9fe1-49b3-9a08-227a296b54a6 d5fe813e-0caa-432a-b2ac-d555aa91bd1c]
+false ./dd.xlsx 0 []
+false ./file_example.xlsx 0 []
+```
+
+
+### usage
+```
+labels.exe [--flags] get [path]
+labels.exe [--flags] set [path] [labelId] [tenantId]
 
 commands
         get: list sensitivity labels for the provided file or directory
