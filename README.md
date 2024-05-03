@@ -1,4 +1,4 @@
-# sensitivity-labels
+# sensitivity_labels
 Get and set Microsoft sensitivity labels.
 
 ### demo

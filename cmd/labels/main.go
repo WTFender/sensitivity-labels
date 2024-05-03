@@ -318,10 +318,6 @@ func checkArgs(args []string) (string, string, string, string) {
 }
 
 func main() {
-
-	TestF()
-	os.Exit(0)
-
 	var files []fs.FileInfo
 	var fileLabels []FileLabel
 

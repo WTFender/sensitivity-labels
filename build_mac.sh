@@ -1,2 +1,6 @@
 #!/bin/bash
-GOOS=darwin  GOARCH=amd64 go build -o "./bin/labels" ./main.go
+outFile="./bin/labels"
+entryFile="./cmd/labels/main.go"
+GOOS=darwin
+GOARCH=amd64
+go build -o $outFile $entryFile
