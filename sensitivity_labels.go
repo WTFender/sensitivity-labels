@@ -24,6 +24,26 @@ func ExitError(e error) {
 	os.Exit(1)
 }
 
+func GetLabelInfoXml(filePath string) Labels {
+	var labels Labels
+	Log([]string{"open: " + filePath}, true)
+	xmlFile, err := os.Open(filePath)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer xmlFile.Close()
+	byteValue, _ := io.ReadAll(xmlFile)
+	xml.Unmarshal(byteValue, &labels)
+	return labels
+}
+
+func CheckLabelInfoPath(dirPath string) (bool, string) {
+	labelInfoPath := dirPath + "/docMetadata/labelInfo.xml"
+	Log([]string{"checkLabelInfo " + labelInfoPath}, true)
+	_, err := os.Stat(labelInfoPath)
+	return (err == nil), labelInfoPath
+}
+
 func Unzip(src, dest string) error {
 	r, err := zip.OpenReader(src)
 	if err != nil {
@@ -88,26 +108,6 @@ func Unzip(src, dest string) error {
 	return nil
 }
 
-func GetLabelInfoXml(filePath string) Labels {
-	var labels Labels
-	Log([]string{"open: " + filePath}, true)
-	xmlFile, err := os.Open(filePath)
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer xmlFile.Close()
-	byteValue, _ := io.ReadAll(xmlFile)
-	xml.Unmarshal(byteValue, &labels)
-	return labels
-}
-
-func CheckLabelInfoPath(dirPath string) (bool, string) {
-	labelInfoPath := dirPath + "/docMetadata/labelInfo.xml"
-	Log([]string{"checkLabelInfo " + labelInfoPath}, true)
-	_, err := os.Stat(labelInfoPath)
-	return (err == nil), labelInfoPath
-}
-
 func isExtensionFile(file os.FileInfo, exts []string) bool {
 	for _, ext := range exts {
 		if filepath.Ext(file.Name()) == ext {
@@ -117,7 +117,7 @@ func isExtensionFile(file os.FileInfo, exts []string) bool {
 	return false
 }
 
-func filterExtensionFiles(files []os.FileInfo, exts []string) []os.FileInfo {
+func filterFilesByExtension(files []os.FileInfo, exts []string) []os.FileInfo {
 	var filteredFiles []os.FileInfo
 	for _, file := range files {
 		if isExtensionFile(file, exts) {
@@ -127,7 +127,6 @@ func filterExtensionFiles(files []os.FileInfo, exts []string) []os.FileInfo {
 	return filteredFiles
 }
 
-// list files in a directory
 func ListExtensionFiles(dir string, recursive bool, exts []string) []os.FileInfo {
 	var files []fs.FileInfo
 
@@ -163,5 +162,5 @@ func ListExtensionFiles(dir string, recursive bool, exts []string) []os.FileInfo
 			ExitError(err)
 		}
 	}
-	return filterExtensionFiles(files, exts)
+	return filterFilesByExtension(files, exts)
 }
