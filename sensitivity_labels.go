@@ -89,20 +89,14 @@ func Unzip(src, dest string) error {
 }
 
 func GetLabelInfoXml(filePath string) Labels {
+	var labels Labels
 	Log([]string{"open: " + filePath}, true)
 	xmlFile, err := os.Open(filePath)
-	// if we os.Open returns an error then handle it
 	if err != nil {
 		fmt.Println(err)
 	}
-	// defer the closing of our xmlFile so that we can parse it later on
 	defer xmlFile.Close()
-	// read our opened xmlFile as a byte array.
 	byteValue, _ := io.ReadAll(xmlFile)
-	// we initialize our Users array
-	var labels Labels
-	// we unmarshal our byteArray which contains our
-	// xmlFiles content into 'users' which we defined above
 	xml.Unmarshal(byteValue, &labels)
 	return labels
 }
