@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
@@ -75,7 +75,7 @@ func parseLabelConfigJson(path string) LabelsConfig {
 	// defer the closing of our jsonFile so that we can parse it later on
 	defer jsonFile.Close()
 	// read our opened xmlFile as a byte array.
-	byteValue, _ := ioutil.ReadAll(jsonFile)
+	byteValue, _ := io.ReadAll(jsonFile)
 	// we initialize our Users array
 	var cfg LabelsConfig
 	// we unmarshal our byteArray which contains our
