@@ -13,7 +13,7 @@ import (
 	sl "github.com/WTFender/sensitivity_labels"
 )
 
-type NameConfig struct {
+type LabelsConfig struct {
 	Labels  map[string]string `json:"labels"`
 	Tenants map[string]string `json:"tenants"`
 }
@@ -23,7 +23,7 @@ var tmpDir, resolve string
 var verbose, showLabeledOnly, showSummary, dryrun, recurse bool
 var delimiter = " "
 
-var labelConfig = NameConfig{}
+var labelConfig = LabelsConfig{}
 var extensions = []string{".docx", ".xlsx", ".pptx"}
 
 func init() {
@@ -65,7 +65,7 @@ examples
 	fmt.Println(fmt.Sprintf(usage, msg))
 }
 
-func parseLabelConfigJson(path string) NameConfig {
+func parseLabelConfigJson(path string) LabelsConfig {
 	// Open our jsonFile
 	jsonFile, err := os.Open(path)
 	// if we os.Open returns an error then handle it
@@ -77,7 +77,7 @@ func parseLabelConfigJson(path string) NameConfig {
 	// read our opened xmlFile as a byte array.
 	byteValue, _ := ioutil.ReadAll(jsonFile)
 	// we initialize our Users array
-	var cfg NameConfig
+	var cfg LabelsConfig
 	// we unmarshal our byteArray which contains our
 	// jsonFile's content into 'users' which we defined above
 	json.Unmarshal(byteValue, &cfg)
