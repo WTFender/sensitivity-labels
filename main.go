@@ -42,9 +42,11 @@ var tmpDir string
 var verbose, showLabeledOnly, showSummary, dryrun, recurse bool
 
 func init() {
+	// TODO add --resolve flag to resolve labels
 	flag.BoolVar(&verbose, "verbose", false, "show diagnostic output")
 	flag.BoolVar(&showLabeledOnly, "labeled", false, "only show labeled files")
 	flag.BoolVar(&showSummary, "summary", false, "display summary of results")
+	flag.BoolVar(&showSummary, "resolve", false, "resolve IDs to names using labels.json")
 	flag.BoolVar(&dryrun, "dry-run", false, "show results of set before applying")
 	flag.BoolVar(&recurse, "recursive", false, "recurse through subdirectory files")
 	flag.StringVar(&tmpDir, "tmp-dir", "./tmp", "temporary directory for file extraction")
