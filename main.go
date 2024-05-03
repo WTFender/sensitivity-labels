@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"encoding/xml"
 	"flag"
 	"fmt"
 	"io"
@@ -11,6 +12,43 @@ import (
 	"strconv"
 	"strings"
 )
+
+type FileLabel struct {
+	FilePath  string
+	LabelInfo bool
+	Labels    []Label
+}
+
+type Labels struct {
+	XMLName xml.Name `xml:"labelList"`
+	Labels  []Label  `xml:"label"`
+}
+
+type Label struct {
+	XMLName     xml.Name `xml:"label"`
+	Id          string   `xml:"id,attr"`
+	SiteId      string   `xml:"siteId,attr"`
+	Enabled     string   `xml:"enabled,attr"`
+	Method      string   `xml:"method,attr"`
+	ContentBits string   `xml:"contentBits,attr"`
+	Removed     string   `xml:"removed,attr"`
+}
+
+var delimiter = " "
+var extensions = []string{".docx", ".xlsx", ".pptx"}
+
+// flags
+var tmpDir string
+var verbose, showLabeledOnly, showSummary, dryrun, recurse bool
+
+func init() {
+	flag.BoolVar(&verbose, "verbose", false, "show diagnostic output")
+	flag.BoolVar(&showLabeledOnly, "labeled", false, "only show labeled files")
+	flag.BoolVar(&showSummary, "summary", false, "display summary of results")
+	flag.BoolVar(&dryrun, "dry-run", false, "show results of set before applying")
+	flag.BoolVar(&recurse, "recursive", false, "recurse through subdirectory files")
+	flag.StringVar(&tmpDir, "tmp-dir", "./tmp", "temporary directory for file extraction")
+}
 
 func Unzip(src, dest string) error {
 	r, err := zip.OpenReader(src)
@@ -28,7 +66,6 @@ func Unzip(src, dest string) error {
 	// Closure to address file descriptors issue with all the deferred .Close() methods
 	extractAndWriteFile := func(f *zip.File) error {
 		rc, err := f.Open()
-		fmt.Println(f.Name)
 		if err != nil {
 			return err
 		}
@@ -77,19 +114,6 @@ func Unzip(src, dest string) error {
 	return nil
 }
 
-var extensions = []string{".docx", ".xlsx", ".pptx"}
-
-// flags
-var tmpDir string
-var verbose, dryrun, recurse bool
-
-func init() {
-	flag.BoolVar(&verbose, "verbose", false, "show diagnostic output")
-	flag.BoolVar(&dryrun, "dry-run", false, "show results of set before applying")
-	flag.BoolVar(&recurse, "recursive", false, "recurse through subdirectory files")
-	flag.StringVar(&tmpDir, "tmp-dir", "./tmp", "temporary directory for file extraction")
-}
-
 func log(msgs []string) {
 	if verbose {
 		for _, m := range msgs {
@@ -111,7 +135,7 @@ usage:
 
 commands	
 	get: list sensitivity labels for the provided file or directory
-	set: apply the provided sensitvity label ID to the provided file or directory
+	set: apply the provided sensitivity label ID to the provided file or directory
 
 arguments
 	path: path to the file or directory
@@ -119,16 +143,16 @@ arguments
 	tenantId: microsoft tenant ID to apply
 
 flags
-	--verbose: show diagnostic output
-	--tmp-dir: temporary directory for file extraction
-	--dry-run: show results of set command without applying
+	--labeled: only show files with labels
+	--summary: show summary of results
 	--recurse: recurse through subdirectory files
+	--dry-run: show results of set command without applying
+	--tmp-dir: temporary directory for file extraction
+	--verbose: show diagnostic output
 
 examples
-	labels.exe get "c:\path\to\directory"
-	labels.exe get "c:\path\to\file.docx"
-	labels.exe set "c:\path\to\file.docx" "1234-1234-1234" "4321-4321-4321"
-	`
+	labels.exe --recursive --labeled get "c:\path\to\directory"
+	labels.exe --summary set "c:\path\to\file.docx" "1234-1234-1234" "4321-4321-4321"`
 	fmt.Println(fmt.Sprintf(usage, msg))
 }
 
@@ -144,19 +168,30 @@ func filter[T any](ss []T, test func(T) bool) (ret []T) {
 }
 */
 
-func PrintResults(path string, files []fs.FileInfo) {
-	for _, file := range files {
-		fmt.Println(path + "/" + file.Name() + " " + strconv.FormatInt(file.Size(), 10) + " bytes")
-	}
+func PrintFileLabelHeader() {
+	fmt.Println(strings.Join([]string{
+		"LabelInfo",
+		"FilePath",
+		"NumLabels",
+		"Labels",
+	}, delimiter))
 }
 
-// Determine if the provided string is a file or directory path
-func CheckPath(path string) fs.FileInfo {
-	info, err := os.Stat(path)
-	if err != nil {
-		exitError(err)
+func PrintFileLabel(fl FileLabel) {
+	// true ./123.xlsx 1 [3de9faa6-9fe1-49b3-9a08-227a296b54a6 d5fe813e-0caa-432a-b2ac-d555aa91bd1c]
+	labels := []string{}
+	for _, label := range fl.Labels {
+		labelStr := strings.ReplaceAll((label.Id + " " + label.SiteId), "{", "")
+		labelStr = strings.ReplaceAll(labelStr, "}", "")
+		labels = append(labels, labelStr)
 	}
-	return info
+	// ./123.xlsx true [label1 label2]
+	fmt.Println(strings.Join([]string{
+		strconv.FormatBool(fl.LabelInfo),
+		fl.FilePath,
+		strconv.Itoa(len(fl.Labels)),           // Convert length to string
+		"[" + strings.Join(labels, ", ") + "]", // Convert labels slice to a string
+	}, delimiter))
 }
 
 func isExtensionFile(file os.FileInfo) bool {
@@ -217,39 +252,91 @@ func ListFiles(dir string, recursive bool) []os.FileInfo {
 	return filterExtensionFiles(files)
 }
 
-func main() {
-	flag.Parse()
-	args := flag.Args()
+func GetLabelInfoXml(filePath string) Labels {
+	log([]string{"open: " + filePath})
+	xmlFile, err := os.Open(filePath)
+	// if we os.Open returns an error then handle it
+	if err != nil {
+		fmt.Println(err)
+	}
+	// defer the closing of our xmlFile so that we can parse it later on
+	defer xmlFile.Close()
+	// read our opened xmlFile as a byte array.
+	byteValue, _ := io.ReadAll(xmlFile)
+	// we initialize our Users array
+	var labels Labels
+	// we unmarshal our byteArray which contains our
+	// xmlFiles content into 'users' which we defined above
+	xml.Unmarshal(byteValue, &labels)
+	// log([]string{"num labels: " + string(len(labels.Labels))})
+	return labels
+}
 
-	tmpDir = tmpDir + "/_/"
+func CheckLabelInfoPath(dirPath string) (bool, string) {
+	labelInfoPath := dirPath + "/docMetadata/labelInfo.xml"
+	log([]string{"checkLabelInfo " + labelInfoPath})
+	_, err := os.Stat(labelInfoPath)
+	return (err == nil), labelInfoPath
+}
 
+func checkArgs(args []string) (string, string, string, string) {
 	log([]string{
 		"args: " + strings.Join(os.Args, ", "),
 		"parsed args: " + strings.Join(args, ", "),
 	})
-
+	var cmd, path string
+	labelId := ""
+	tenantId := ""
 	if len(args) < 1 {
 		printUsage("Error: missing command argument")
-		os.Exit(1)
-	} else if args[0] != "get" && args[0] != "set" {
-		printUsage("Error: unsupported command " + args[0])
 		os.Exit(1)
 	} else if len(args) < 2 {
 		printUsage("Error: missing path argument")
 		os.Exit(1)
+	} else if args[0] != "get" && args[0] != "set" {
+		printUsage("Error: unsupported command " + args[0])
+		os.Exit(1)
+	} else if args[0] == "set" && len(args) < 3 {
+		printUsage("Error: missing labelId argument")
+		os.Exit(1)
+	} else if args[0] == "set" && len(args) < 4 {
+		printUsage("Error: missing tenantId argument")
+		os.Exit(1)
+	} else if len(args) > 4 {
+		printUsage("Error: too many arguments")
+		os.Exit(1)
 	}
+	cmd = args[0]
+	path = args[1]
+	if len(args) == 4 {
+		labelId = args[2]
+		tenantId = args[3]
+	}
+	return cmd, path, labelId, tenantId
+}
 
-	cmd := args[0]
-	path := args[1]
+func main() {
+	var files []fs.FileInfo
+	var fileLabels []FileLabel
 
+	// get command line arguments
+	flag.Parse()
+	args := flag.Args()
+	cmd, path, labelId, tenantId := checkArgs(args)
 	log([]string{
 		"arg command: " + cmd,
 		"arg path: " + path,
+		"arg labelId: " + labelId,
+		"arg tenantId: " + tenantId,
 	})
 
-	var files []fs.FileInfo
+	// check if path exists
+	pathInfo, err := os.Stat(path)
+	if err != nil {
+		exitError(err)
+	}
 
-	pathInfo := CheckPath(path)
+	// check if path is a directory, if so list files
 	if pathInfo.IsDir() {
 		files = ListFiles(path, false)
 	} else {
@@ -257,42 +344,58 @@ func main() {
 		files = append(files, pathInfo)
 	}
 
-	if cmd == "get" {
-		PrintResults(path, files)
+	// print results header if files found
+	if len(files) == 0 {
+		fmt.Println("No files found")
+		os.Exit(0)
+	} else {
+		PrintFileLabelHeader()
+	}
 
-	} else if cmd == "set" {
-		if len(args) < 3 {
-			printUsage("Error: missing labelId argument")
-			os.Exit(1)
-		} else if len(args) < 4 {
-			printUsage("Error: missing tenantId argument")
-			os.Exit(1)
+	// iterate through files
+	for _, file := range files {
+		// create full path to file
+		filePath := path + "/" + file.Name()
+		// create temporary directory for file extraction
+		tmpUnzipDir := tmpDir + "_" + file.Name()
+		log([]string{"tmpUnzipDir: " + tmpUnzipDir})
+		err := Unzip(filePath, tmpUnzipDir)
+		if err != nil {
+			// clean up on error
+			exitError(err)
+			os.RemoveAll(tmpUnzipDir)
+		}
+		// check extracted files for docMetadata/LabelInfo.xml
+		labelInfoExists, labelInfoPath := CheckLabelInfoPath(tmpUnzipDir)
+		fl := FileLabel{
+			FilePath:  filePath,
+			LabelInfo: labelInfoExists,
+			Labels:    []Label{},
 		}
 
-		labelId := args[2]
-		tenantId := args[3]
-
-		log([]string{
-			"arg labelId: " + labelId,
-			"arg tenantId: " + tenantId,
-		})
-
-		for _, file := range files {
-			filePath := path + "/" + file.Name()
-			tmpFileDir := tmpDir + file.Name()
-			// clean start
-			os.RemoveAll(tmpFileDir)
-			log([]string{tmpFileDir})
-			err := Unzip(filePath, tmpFileDir)
-
-			// TODO modify labels here
-
-			if err != nil {
-				// clean up on error
-				os.RemoveAll(tmpFileDir)
-				exitError(err)
-			}
-			os.RemoveAll(tmpFileDir)
+		// if LabelInfo.xml exists, parse XML and return labels
+		if fl.LabelInfo {
+			labels := GetLabelInfoXml(labelInfoPath)
+			fl.Labels = labels.Labels
+		} else {
+			log([]string{"LabelInfo.xml not found"})
 		}
+
+		// print results
+		PrintFileLabel(fl)
+		fileLabels = append(fileLabels, fl)
+
+		// set new label
+		if cmd == "set" {
+			fmt.Println("TODO set labels")
+			// TODO set labels here
+		}
+
+		os.RemoveAll(tmpUnzipDir)
+	}
+
+	// print results summary
+	if showSummary {
+		fmt.Println(fileLabels)
 	}
 }
