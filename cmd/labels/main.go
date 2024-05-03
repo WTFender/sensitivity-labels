@@ -49,7 +49,7 @@ func init() {
 	flag.BoolVar(&showSummary, "resolve", false, "resolve IDs to names using labels.json")
 	flag.BoolVar(&dryrun, "dry-run", false, "show results of set before applying")
 	flag.BoolVar(&recurse, "recursive", false, "recurse through subdirectory files")
-	flag.StringVar(&tmpDir, "tmp-dir", "./tmp", "temporary directory for file extraction")
+	flag.StringVar(&tmpDir, "tmp-dir", "./", "temporary directory for file extraction")
 }
 
 func Unzip(src, dest string) error {
@@ -318,6 +318,10 @@ func checkArgs(args []string) (string, string, string, string) {
 }
 
 func main() {
+
+	TestF()
+	os.Exit(0)
+
 	var files []fs.FileInfo
 	var fileLabels []FileLabel
 
@@ -359,7 +363,7 @@ func main() {
 		// create full path to file
 		filePath := path + "/" + file.Name()
 		// create temporary directory for file extraction
-		tmpUnzipDir := tmpDir + "_" + file.Name()
+		tmpUnzipDir := tmpDir + "/_" + file.Name()
 		log([]string{"tmpUnzipDir: " + tmpUnzipDir})
 		err := Unzip(filePath, tmpUnzipDir)
 		if err != nil {
