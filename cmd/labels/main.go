@@ -225,6 +225,7 @@ func main() {
 	} else {
 		// single file
 		files = append(files, pathInfo)
+		path = strings.ReplaceAll(path, pathInfo.Name(), "")
 	}
 
 	// print results header if files found
@@ -241,7 +242,10 @@ func main() {
 		filePath := path + "/" + file.Name()
 		// create temporary directory for file extraction
 		tmpUnzipDir := tmpDir + "/_" + file.Name()
-		log([]string{"tmpUnzipDir: " + tmpUnzipDir})
+		log([]string{
+			"filePath: " + filePath,
+			"tmpUnzipDir: " + tmpUnzipDir,
+		})
 		err := sl.Unzip(filePath, tmpUnzipDir)
 		if err != nil {
 			// clean up on error
@@ -273,13 +277,16 @@ func main() {
 		PrintFileLabel(fl)
 		fileLabels = append(fileLabels, fl)
 
-		// set new label
-		if cmd == "set" {
-			fmt.Println("TODO set labels")
-			// TODO set labels here
-		}
-
 		cleanup(tmpUnzipDir)
+	}
+
+	// set new label
+	if cmd == "set" && dryrun {
+		fmt.Println("DRY RUN DRY RUN DRY RUN")
+		// TODO set labels here
+	} else if cmd == "set" {
+		fmt.Println("TODO set labels")
+		// TODO set labels here
 	}
 
 	// print results summary

@@ -16,6 +16,27 @@ func ExitError(e error) {
 	os.Exit(1)
 }
 
+func templateLabelInfoXml(labels Labels) string {
+	xmlStr := `<?xml version="1.0" encoding="utf-8" standalone="yes"?>`
+	xmlStr += `<clbl:labelList xmlns:clbl="http://schemas.microsoft.com/office/2020/mipLabelMetadata">`
+	for _, label := range labels.Labels {
+		xmlStr += fmt.Sprintf(
+			`<clbl:label id="%s" enabled="1" method="Privileged" siteId="%s" contentBits="0" removed="0"/>`,
+			label.Id,
+			label.SiteId,
+		)
+	}
+	xmlStr += `</clbl:labelList>`
+	return xmlStr
+}
+
+func SetLabelInfoXml(filePath string, labels Labels) {
+	err := os.WriteFile(filePath, []byte(templateLabelInfoXml(labels)), 0644)
+	if err != nil {
+		fmt.Println("warn: error writing " + filePath)
+	}
+}
+
 func GetLabelInfoXml(filePath string) Labels {
 	var labels Labels
 	xmlFile, err := os.Open(filePath)
