@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"io/fs"
@@ -11,6 +10,7 @@ import (
 	"strings"
 
 	sl "github.com/WTFender/sensitivity_labels"
+	flag "github.com/spf13/pflag"
 )
 
 // config.json can optionally be used
@@ -47,13 +47,16 @@ func init() {
 	flag.BoolVar(&recurse, "recursive", false, "recurse through subdirectory files")
 	flag.StringVar(&tmpDir, "tmp-dir", "./", "temporary directory for file extraction")
 	flag.BoolVar(&noCleanup, "no-cleanup", false, "do not remove temporary directory contents")
+	flag.Usage = func() {
+		printUsage("")
+	}
 }
 
 func printUsage(msg string) {
 	usage := `%s
 usage:
-	labels.exe [--flags] get [path]
-	labels.exe [--flags] set [path] [labelId] [tenantId]
+	labels.exe [--flags] get <path>
+	labels.exe [--flags] set <path> <labelId> <tenantId>
 
 commands	
 	get: list sensitivity labels for the provided file or directory
@@ -65,19 +68,11 @@ arguments
 	tenantId: microsoft tenant ID to apply
 
 flags
-	--extensions: file extensions to search for (default: %s)
-	--labeled: only show files with sensitivity labels
-	--summary: show summary of results
-	--recurse: recurse through subdirectory files
-	--dry-run: show results of set command without applying
-	--verbose: show diagnostic output
-	--tmp-dir: path to temporary directory for file extraction
-	--no-cleanup: do not remove temporary directory contents
-
+%s
 examples
 	labels.exe --recursive --labeled get "c:\path\to\directory"
 	labels.exe --summary set "c:\path\to\file.docx" "1234-1234-1234" "4321-4321-4321"`
-	fmt.Println(fmt.Sprintf(usage, msg, extensionsCsv))
+	fmt.Println(fmt.Sprintf(usage, msg, flag.CommandLine.FlagUsages()))
 }
 
 func cleanup(path string) {
@@ -110,6 +105,10 @@ func PrintFileLabelHeader() {
 func PrintFileLabel(fl sl.FileLabel) {
 	// true ./123.xlsx 1 [3de9faa6-9fe1-49b3-9a08-227a296b54a6 d5fe813e-0caa-432a-b2ac-d555aa91bd1c]
 	labelsArr := []string{}
+	if showLabeledOnly && len(fl.Labels) == 0 {
+		// --labeled flag, do not show files with no labels
+		return
+	}
 	for _, label := range fl.Labels {
 		labelStr := strings.ReplaceAll((label.Id + " " + label.SiteId), "{", "")
 		labelStr = strings.ReplaceAll(labelStr, "}", "")
