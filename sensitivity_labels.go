@@ -11,14 +11,6 @@ import (
 	"strings"
 )
 
-func Log(msgs []string, verbose bool) {
-	if verbose {
-		for _, m := range msgs {
-			fmt.Println(m)
-		}
-	}
-}
-
 func ExitError(e error) {
 	fmt.Println(e.Error())
 	os.Exit(1)
@@ -26,7 +18,6 @@ func ExitError(e error) {
 
 func GetLabelInfoXml(filePath string) Labels {
 	var labels Labels
-	Log([]string{"open: " + filePath}, true)
 	xmlFile, err := os.Open(filePath)
 	if err != nil {
 		fmt.Println(err)
@@ -39,7 +30,6 @@ func GetLabelInfoXml(filePath string) Labels {
 
 func CheckLabelInfoPath(dirPath string) (bool, string) {
 	labelInfoPath := dirPath + "/docMetadata/labelInfo.xml"
-	Log([]string{"checkLabelInfo " + labelInfoPath}, true)
 	_, err := os.Stat(labelInfoPath)
 	return (err == nil), labelInfoPath
 }

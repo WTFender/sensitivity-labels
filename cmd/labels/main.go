@@ -13,20 +13,32 @@ import (
 	sl "github.com/WTFender/sensitivity_labels"
 )
 
+// config.json can optionally be used
+// to map label and tenant IDs to names
 type LabelsConfig struct {
 	Labels  map[string]string `json:"labels"`
 	Tenants map[string]string `json:"tenants"`
 }
 
-// flags
-var tmpDir, resolve string
-var verbose, showLabeledOnly, showSummary, dryrun, recurse bool
-var delimiter = " "
-
 var labelConfig = LabelsConfig{}
-var extensions = []string{".docx", ".xlsx", ".pptx"}
+
+// flags
+var extensionsCsv = ".docx,.xlsx,.pptx"
+var tmpDir, resolve string
+var verbose, showLabeledOnly, showSummary, dryrun, noCleanup, recurse bool
+var delimiter = " " // TODO cleanup this
+
+// logger
+func log(msgs []string) {
+	if verbose {
+		for _, m := range msgs {
+			fmt.Println(m)
+		}
+	}
+}
 
 func init() {
+	flag.StringVar(&extensionsCsv, "extensions", extensionsCsv, "file extensions to search for (default: "+extensionsCsv+")")
 	flag.BoolVar(&verbose, "verbose", false, "show diagnostic output")
 	flag.BoolVar(&showLabeledOnly, "labeled", false, "only show labeled files")
 	flag.BoolVar(&showSummary, "summary", false, "display summary of results")
@@ -34,6 +46,7 @@ func init() {
 	flag.BoolVar(&dryrun, "dry-run", false, "show results of set before applying")
 	flag.BoolVar(&recurse, "recursive", false, "recurse through subdirectory files")
 	flag.StringVar(&tmpDir, "tmp-dir", "./", "temporary directory for file extraction")
+	flag.BoolVar(&noCleanup, "no-cleanup", false, "do not remove temporary directory contents")
 }
 
 func printUsage(msg string) {
@@ -52,17 +65,25 @@ arguments
 	tenantId: microsoft tenant ID to apply
 
 flags
-	--labeled: only show files with labels
+	--extensions: file extensions to search for (default: %s)
+	--labeled: only show files with sensitivity labels
 	--summary: show summary of results
 	--recurse: recurse through subdirectory files
 	--dry-run: show results of set command without applying
-	--tmp-dir: temporary directory for file extraction
 	--verbose: show diagnostic output
+	--tmp-dir: path to temporary directory for file extraction
+	--no-cleanup: do not remove temporary directory contents
 
 examples
 	labels.exe --recursive --labeled get "c:\path\to\directory"
 	labels.exe --summary set "c:\path\to\file.docx" "1234-1234-1234" "4321-4321-4321"`
-	fmt.Println(fmt.Sprintf(usage, msg))
+	fmt.Println(fmt.Sprintf(usage, msg, extensionsCsv))
+}
+
+func cleanup(path string) {
+	if !noCleanup {
+		os.RemoveAll(path)
+	}
 }
 
 func parseLabelConfigJson(path string) LabelsConfig {
@@ -88,26 +109,37 @@ func PrintFileLabelHeader() {
 
 func PrintFileLabel(fl sl.FileLabel) {
 	// true ./123.xlsx 1 [3de9faa6-9fe1-49b3-9a08-227a296b54a6 d5fe813e-0caa-432a-b2ac-d555aa91bd1c]
-	labels := []string{}
+	labelsArr := []string{}
 	for _, label := range fl.Labels {
 		labelStr := strings.ReplaceAll((label.Id + " " + label.SiteId), "{", "")
 		labelStr = strings.ReplaceAll(labelStr, "}", "")
-		labels = append(labels, labelStr)
+		labelsArr = append(labelsArr, labelStr)
+	}
+	combinedLabelStr := "[" + strings.Join(labelsArr, ", ") + "]"
+	// resolve ids to names if config provided
+	if resolve != "" {
+		// for each key in labelConfig.Labels, replace id with name
+		for labelId, labelName := range labelConfig.Labels {
+			combinedLabelStr = strings.ReplaceAll(combinedLabelStr, labelId, labelName)
+		}
+		for tenantId, tenantName := range labelConfig.Tenants {
+			combinedLabelStr = strings.ReplaceAll(combinedLabelStr, tenantId, tenantName)
+		}
 	}
 	// ./123.xlsx true [label1 label2]
 	fmt.Println(strings.Join([]string{
 		strconv.FormatBool(fl.LabelInfo),
 		fl.FilePath,
-		strconv.Itoa(len(fl.Labels)),           // Convert length to string
-		"[" + strings.Join(labels, ", ") + "]", // Convert labels slice to a string
+		strconv.Itoa(len(fl.Labels)), // Convert length to string
+		combinedLabelStr,
 	}, delimiter))
 }
 
-func checkArgs(args []string) (string, string, string, string) {
-	sl.Log([]string{
+func checkArgs(args []string) (string, string, string, string, []string) {
+	log([]string{
 		"args: " + strings.Join(os.Args, ", "),
 		"parsed args: " + strings.Join(args, ", "),
-	}, verbose)
+	})
 	var cmd, path string
 	labelId := ""
 	tenantId := ""
@@ -136,6 +168,11 @@ func checkArgs(args []string) (string, string, string, string) {
 		labelId = args[2]
 		tenantId = args[3]
 	}
+	// check if extensions flag is set
+	extensions := strings.Split(strings.TrimSpace(extensionsCsv), ",")
+	if len(extensions) < 1 {
+		fmt.Println("Skipping ID resolution, unable to parse JSON reference: " + resolve)
+	}
 	// check if resolve JSON file is valid, ignore if not
 	if resolve != "" {
 		info, err := os.Stat(resolve)
@@ -145,14 +182,18 @@ func checkArgs(args []string) (string, string, string, string) {
 		} else {
 			labelConfig = parseLabelConfigJson(resolve)
 			numIds := (len(labelConfig.Labels) + len(labelConfig.Tenants))
-			sl.Log([]string{
+			log([]string{
 				"loaded labelConfig: " + resolve,
 				"labelConfig numEntries: " + strconv.Itoa(numIds),
-			}, verbose)
+			})
 		}
 
 	}
-	return cmd, path, labelId, tenantId
+	if noCleanup {
+		log([]string{"noCleanup: true"})
+		fmt.Println("warn: temporary directory will not be removed")
+	}
+	return cmd, path, labelId, tenantId, extensions
 }
 
 func main() {
@@ -163,14 +204,15 @@ func main() {
 	// get command line arguments
 	flag.Parse()
 	args := flag.Args()
-	cmd, path, labelId, tenantId := checkArgs(args)
+	cmd, path, labelId, tenantId, extensions := checkArgs(args)
 
-	sl.Log([]string{
+	log([]string{
 		"arg command: " + cmd,
 		"arg path: " + path,
 		"arg labelId: " + labelId,
 		"arg tenantId: " + tenantId,
-	}, verbose)
+		"arg extensions: " + strings.Join(extensions, ", "),
+	})
 
 	// check if path exists
 	pathInfo, err := os.Stat(path)
@@ -200,15 +242,19 @@ func main() {
 		filePath := path + "/" + file.Name()
 		// create temporary directory for file extraction
 		tmpUnzipDir := tmpDir + "/_" + file.Name()
-		sl.Log([]string{"tmpUnzipDir: " + tmpUnzipDir}, verbose)
+		log([]string{"tmpUnzipDir: " + tmpUnzipDir})
 		err := sl.Unzip(filePath, tmpUnzipDir)
 		if err != nil {
 			// clean up on error
 			sl.ExitError(err)
-			os.RemoveAll(tmpUnzipDir)
+			cleanup(tmpUnzipDir)
 		}
 		// check extracted files for docMetadata/LabelInfo.xml
 		labelInfoExists, labelInfoPath := sl.CheckLabelInfoPath(tmpUnzipDir)
+		log([]string{
+			"labelInfoExists: " + strconv.FormatBool(labelInfoExists),
+			"checkLabelInfoPath: " + labelInfoPath,
+		})
 		fl := sl.FileLabel{
 			FilePath:  filePath,
 			LabelInfo: labelInfoExists,
@@ -217,10 +263,11 @@ func main() {
 
 		// if LabelInfo.xml exists, parse XML and return labels
 		if fl.LabelInfo {
+			log([]string{"open: " + filePath})
 			labels := sl.GetLabelInfoXml(labelInfoPath)
 			fl.Labels = labels.Labels
 		} else {
-			sl.Log([]string{"LabelInfo.xml not found"}, verbose)
+			log([]string{"LabelInfo.xml not found"})
 		}
 
 		// print results
@@ -233,7 +280,7 @@ func main() {
 			// TODO set labels here
 		}
 
-		os.RemoveAll(tmpUnzipDir)
+		cleanup(tmpUnzipDir)
 	}
 
 	// print results summary
