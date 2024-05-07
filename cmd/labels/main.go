@@ -25,7 +25,7 @@ var labelConfig = LabelsConfig{}
 // flags
 var extensionsCsv = ".docx,.xlsx,.pptx"
 var tmpDir, config string
-var verbose, showLabeledOnly, showSummary, dryrun, noCleanup, recurse bool
+var verbose, showJson, showLabeledOnly, dryrun, noCleanup, recurse bool
 var delimiter = " " // TODO cleanup this
 
 // logger
@@ -41,7 +41,7 @@ func init() {
 	flag.StringVar(&extensionsCsv, "extensions", extensionsCsv, "file extensions to search for (default: "+extensionsCsv+")")
 	flag.BoolVar(&verbose, "verbose", false, "show diagnostic output")
 	flag.BoolVar(&showLabeledOnly, "labeled", false, "only show labeled files")
-	flag.BoolVar(&showSummary, "summary", false, "display summary of results")
+	flag.BoolVar(&showJson, "json", false, "display results as json")
 	flag.StringVar(&config, "config", "", "path to JSON file containing ID to name mappings")
 	flag.BoolVar(&dryrun, "dry-run", false, "show results of set before applying")
 	flag.BoolVar(&recurse, "recursive", false, "recurse through subdirectory files")
@@ -71,7 +71,7 @@ flags
 %s
 examples
 	labels.exe --recursive --labeled get "c:\path\to\directory"
-	labels.exe --summary set "c:\path\to\file.docx" "1234-1234-1234" "4321-4321-4321"`
+	labels.exe --json set "c:\path\to\file.docx" "1234-1234-1234" "4321-4321-4321"`
 	fmt.Println(fmt.Sprintf(usage, msg, flag.CommandLine.FlagUsages()))
 }
 
@@ -101,19 +101,21 @@ func parseLabelConfigJson(path string) LabelsConfig {
 }
 
 func PrintFileLabelHeader() {
-	fmt.Println(strings.Join([]string{
-		"LabelInfo",
-		"FilePath",
-		"NumLabels",
-		"Labels",
-	}, delimiter))
+	if !showJson {
+		fmt.Println(strings.Join([]string{
+			"LabelInfo",
+			"FilePath",
+			"NumLabels",
+			"Labels",
+		}, delimiter))
+	}
+
 }
 
 func PrintFileLabel(fl sl.FileLabel) {
 	// true ./123.xlsx 1 [3de9faa6-9fe1-49b3-9a08-227a296b54a6 d5fe813e-0caa-432a-b2ac-d555aa91bd1c]
 	labelsArr := []string{}
-	if showLabeledOnly && len(fl.Labels) == 0 {
-		// --labeled flag, do not show files with no labels
+	if showJson {
 		return
 	}
 	for _, label := range fl.Labels {
@@ -309,14 +311,19 @@ func main() {
 				fl.Labels = newLabels.Labels
 			}
 		}
-
-		PrintFileLabel(fl)
-		fileLabels = append(fileLabels, fl)
+		if !(showLabeledOnly && len(fl.Labels) == 0) {
+			PrintFileLabel(fl)
+			fileLabels = append(fileLabels, fl)
+		}
 		cleanup(tmpUnzipDir)
 	}
 
-	// print results summary
-	if showSummary {
-		fmt.Println(fileLabels)
+	// print json results
+	if showJson {
+		jsonBytes, err := json.MarshalIndent(fileLabels, "", "  ")
+		if err != nil {
+			sl.ExitError(err)
+		}
+		fmt.Println(string(jsonBytes))
 	}
 }
