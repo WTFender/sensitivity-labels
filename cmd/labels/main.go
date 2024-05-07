@@ -25,7 +25,7 @@ var labelConfig = LabelsConfig{}
 // flags
 var extensionsCsv = ".docx,.xlsx,.pptx"
 var tmpDir, config string
-var verbose, showJson, showLabeledOnly, dryrun, noCleanup, recurse bool
+var verbose, showHelp, showJson, showLabeledOnly, dryrun, noCleanup, recurse bool
 var delimiter = " " // TODO cleanup this
 
 // logger
@@ -38,7 +38,7 @@ func log(msgs []string) {
 }
 
 func init() {
-	flag.StringVar(&extensionsCsv, "extensions", extensionsCsv, "file extensions to search for (default: "+extensionsCsv+")")
+	flag.StringVar(&extensionsCsv, "extensions", extensionsCsv, "file extensions to search for")
 	flag.BoolVar(&verbose, "verbose", false, "show diagnostic output")
 	flag.BoolVar(&showLabeledOnly, "labeled", false, "only show labeled files")
 	flag.BoolVar(&showJson, "json", false, "display results as json")
@@ -47,6 +47,7 @@ func init() {
 	flag.BoolVar(&recurse, "recursive", false, "recurse through subdirectory files")
 	flag.StringVar(&tmpDir, "tmp-dir", "./", "temporary directory for file extraction")
 	flag.BoolVar(&noCleanup, "no-cleanup", false, "do not remove temporary directory contents")
+	flag.BoolVar(&showHelp, "help", false, "show usage")
 	flag.Usage = func() {
 		printUsage("")
 	}
@@ -70,8 +71,9 @@ arguments
 flags
 %s
 examples
-	labels.exe --recursive --labeled get "c:\path\to\directory"
-	labels.exe --json set "c:\path\to\file.docx" "1234-1234-1234" "4321-4321-4321"`
+	labels.exe get .
+	labels.exe get "path\to\dir" --labeled --recursive --json 
+	labels.exe set "path\to\file.xlsx" "1234-label-id-1234" "4321-tenant-id-4321"`
 	fmt.Println(fmt.Sprintf(usage, msg, flag.CommandLine.FlagUsages()))
 }
 
@@ -215,6 +217,10 @@ func main() {
 
 	// get command line arguments
 	flag.Parse()
+	if showHelp {
+		printUsage("")
+		os.Exit(0)
+	}
 	args := flag.Args()
 	cmd, path, labelId, tenantId, extensions := checkArgs(args)
 

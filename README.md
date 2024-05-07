@@ -37,8 +37,9 @@ flags
         --verbose: show diagnostic output
 
 examples
-        labels.exe --recursive --labeled get "c:\path\to\directory"
-        labels.exe --summary set "c:\path\to\file.docx" "1234-1234-1234" "4321-4321-4321"
+	labels.exe get .
+	labels.exe get "path\to\dir" --labeled --recursive --json 
+	labels.exe set "path\to\file.xlsx" "1234-label-id-1234" "4321-tenant-id-4321"
 ```
 
 ### about
