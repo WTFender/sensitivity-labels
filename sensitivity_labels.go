@@ -100,6 +100,9 @@ func SetLabels(unzipDir, filePath, labelInfoPath string, newLabels Labels) error
 	if err != nil {
 		return err
 	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -109,9 +112,9 @@ func GetLabelInfoXml(filePath string) Labels {
 	if err != nil {
 		fmt.Println(err)
 	}
-	defer xmlFile.Close()
 	byteValue, _ := io.ReadAll(xmlFile)
 	xml.Unmarshal(byteValue, &labels)
+	xmlFile.Close()
 	return labels
 }
 

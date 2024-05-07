@@ -24,7 +24,7 @@ var labelConfig = LabelsConfig{}
 
 // flags
 var extensionsCsv = ".docx,.xlsx,.pptx"
-var tmpDir, resolve string
+var tmpDir, config string
 var verbose, showLabeledOnly, showSummary, dryrun, noCleanup, recurse bool
 var delimiter = " " // TODO cleanup this
 
@@ -42,7 +42,7 @@ func init() {
 	flag.BoolVar(&verbose, "verbose", false, "show diagnostic output")
 	flag.BoolVar(&showLabeledOnly, "labeled", false, "only show labeled files")
 	flag.BoolVar(&showSummary, "summary", false, "display summary of results")
-	flag.StringVar(&resolve, "resolve", "", "path to JSON file containing ID to name mappings")
+	flag.StringVar(&config, "config", "", "path to JSON file containing ID to name mappings")
 	flag.BoolVar(&dryrun, "dry-run", false, "show results of set before applying")
 	flag.BoolVar(&recurse, "recursive", false, "recurse through subdirectory files")
 	flag.StringVar(&tmpDir, "tmp-dir", "./", "temporary directory for file extraction")
@@ -78,7 +78,13 @@ examples
 func cleanup(path string) {
 	log([]string{"cleanup: " + path})
 	if !noCleanup {
-		os.RemoveAll(path)
+		err := os.RemoveAll(path)
+		if err != nil {
+			log([]string{
+				"cleanup error: " + path,
+				err.Error(),
+			})
+		}
 	}
 }
 
@@ -117,7 +123,7 @@ func PrintFileLabel(fl sl.FileLabel) {
 	}
 	combinedLabelStr := "[" + strings.Join(labelsArr, ", ") + "]"
 	// resolve ids to names if config provided
-	if resolve != "" {
+	if config != "" {
 		// for each key in labelConfig.Labels, replace id with name
 		for labelId, labelName := range labelConfig.Labels {
 			combinedLabelStr = strings.ReplaceAll(combinedLabelStr, labelId, labelName)
@@ -171,19 +177,19 @@ func checkArgs(args []string) (string, string, string, string, []string) {
 	// check if extensions flag is set
 	extensions := strings.Split(strings.TrimSpace(extensionsCsv), ",")
 	if len(extensions) < 1 {
-		fmt.Println("Skipping ID resolution, unable to parse JSON reference: " + resolve)
+		fmt.Println("Skipping ID resolution, unable to parse JSON reference: " + config)
 	}
-	// check if resolve JSON file is valid, ignore if not
-	if resolve != "" {
-		info, err := os.Stat(resolve)
+	// check if config file is valid, ignore if not
+	if config != "" {
+		info, err := os.Stat(config)
 		if err != nil || info.IsDir() {
-			fmt.Println("Skipping ID resolution, unable to parse JSON reference: " + resolve)
-			resolve = ""
+			fmt.Println("Skipping ID resolution, unable to parse JSON reference: " + config)
+			config = ""
 		} else {
-			labelConfig = parseLabelConfigJson(resolve)
+			labelConfig = parseLabelConfigJson(config)
 			numIds := (len(labelConfig.Labels) + len(labelConfig.Tenants))
 			log([]string{
-				"loaded labelConfig: " + resolve,
+				"loaded labelConfig: " + config,
 				"labelConfig numEntries: " + strconv.Itoa(numIds),
 			})
 		}
