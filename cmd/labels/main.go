@@ -76,6 +76,7 @@ examples
 }
 
 func cleanup(path string) {
+	log([]string{"cleanup: " + path})
 	if !noCleanup {
 		os.RemoveAll(path)
 	}
@@ -192,6 +193,10 @@ func checkArgs(args []string) (string, string, string, string, []string) {
 		log([]string{"noCleanup: true"})
 		fmt.Println("warn: temporary directory will not be removed")
 	}
+	if dryrun {
+		log([]string{"dryrun: true"})
+		fmt.Println("warn: dry-run enabled")
+	}
 	return cmd, path, labelId, tenantId, extensions
 }
 
@@ -246,10 +251,10 @@ func main() {
 			"filePath: " + filePath,
 			"tmpUnzipDir: " + tmpUnzipDir,
 		})
-		err := sl.Unzip(filePath, tmpUnzipDir)
-		if err != nil {
+		unzipErr := sl.Unzip(filePath, tmpUnzipDir)
+		if unzipErr != nil {
 			// clean up on error
-			sl.ExitError(err)
+			sl.ExitError(unzipErr)
 			cleanup(tmpUnzipDir)
 		}
 		// check extracted files for docMetadata/LabelInfo.xml
@@ -273,20 +278,35 @@ func main() {
 			log([]string{"LabelInfo.xml not found"})
 		}
 
-		// print results
+		// set labels
+		if cmd == "set" && unzipErr == nil {
+			// set new label
+			log([]string{"write: " + labelInfoPath})
+			newLabels := sl.Labels{
+				Labels: []sl.Label{
+					{
+						Id:          labelId,
+						SiteId:      tenantId,
+						Enabled:     "1",
+						Method:      "Privileged",
+						ContentBits: "0",
+						Removed:     "0",
+					},
+				}}
+			if dryrun {
+				fl.Labels = newLabels.Labels
+			} else {
+				err := sl.SetLabels(tmpUnzipDir, filePath, labelInfoPath, newLabels)
+				if err != nil {
+					sl.ExitError(err)
+				}
+				fl.Labels = newLabels.Labels
+			}
+		}
+
 		PrintFileLabel(fl)
 		fileLabels = append(fileLabels, fl)
-
 		cleanup(tmpUnzipDir)
-	}
-
-	// set new label
-	if cmd == "set" && dryrun {
-		fmt.Println("DRY RUN DRY RUN DRY RUN")
-		// TODO set labels here
-	} else if cmd == "set" {
-		fmt.Println("TODO set labels")
-		// TODO set labels here
 	}
 
 	// print results summary

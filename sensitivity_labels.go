@@ -2,6 +2,7 @@ package sensitivity_labels
 
 import (
 	"archive/zip"
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -16,25 +17,90 @@ func ExitError(e error) {
 	os.Exit(1)
 }
 
+func Zip(dir string) (io.Reader, error) {
+	buf := bytes.Buffer{}
+	w := zip.NewWriter(&buf)
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		relPath, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		zipPath := filepath.ToSlash(relPath)
+		f, err := w.Create(zipPath)
+		if err != nil {
+			return err
+		}
+		in, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(f, in)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = w.Close()
+	if err != nil {
+		return nil, err
+	}
+	return &buf, nil
+}
+
 func templateLabelInfoXml(labels Labels) string {
 	xmlStr := `<?xml version="1.0" encoding="utf-8" standalone="yes"?>`
 	xmlStr += `<clbl:labelList xmlns:clbl="http://schemas.microsoft.com/office/2020/mipLabelMetadata">`
 	for _, label := range labels.Labels {
 		xmlStr += fmt.Sprintf(
-			`<clbl:label id="%s" enabled="1" method="Privileged" siteId="%s" contentBits="0" removed="0"/>`,
+			`<clbl:label id="{%s}" enabled="%s" method="%s" siteId="{%s}" contentBits="%s" removed="%s"/>`,
 			label.Id,
+			label.Enabled,
+			label.Method,
 			label.SiteId,
+			label.ContentBits,
+			label.Removed,
 		)
 	}
 	xmlStr += `</clbl:labelList>`
 	return xmlStr
 }
 
-func SetLabelInfoXml(filePath string, labels Labels) {
+func SetLabelInfoXml(filePath string, labels Labels) error {
 	err := os.WriteFile(filePath, []byte(templateLabelInfoXml(labels)), 0644)
 	if err != nil {
 		fmt.Println("warn: error writing " + filePath)
+		fmt.Println(err)
 	}
+	return err
+}
+
+func SetLabels(unzipDir, filePath, labelInfoPath string, newLabels Labels) error {
+	err := SetLabelInfoXml(labelInfoPath, newLabels)
+	if err != nil {
+		return err
+	}
+	zip, err := Zip(unzipDir)
+	if err != nil {
+		return err
+	}
+	zipBytes, err := io.ReadAll(zip)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(filePath, zipBytes, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func GetLabelInfoXml(filePath string) Labels {
@@ -50,7 +116,7 @@ func GetLabelInfoXml(filePath string) Labels {
 }
 
 func CheckLabelInfoPath(dirPath string) (bool, string) {
-	labelInfoPath := dirPath + "/docMetadata/labelInfo.xml"
+	labelInfoPath := dirPath + "/docMetadata/LabelInfo.xml"
 	_, err := os.Stat(labelInfoPath)
 	return (err == nil), labelInfoPath
 }
