@@ -115,7 +115,7 @@ func PrintFileLabelHeader() {
 }
 
 func PrintFileLabel(fl sl.FileLabel) {
-	// true ./123.xlsx 1 [3de9faa6-9fe1-49b3-9a08-227a296b54a6 d5fe813e-0caa-432a-b2ac-d555aa91bd1c]
+	// true ./123.xlsx 1 [3de9faa6-9fe1-49b3-9a08-227a296b54a6 f49dfc2f-b2b1-4605-accd-09d3ac0089a8]
 	labelsArr := []string{}
 	if showJson {
 		return
